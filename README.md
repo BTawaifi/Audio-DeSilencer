@@ -1,6 +1,6 @@
-# AudioDeSilencer
+# Audio DeSilencer
 
-AudioDeSilencer is a powerful Python package for audio processing that empowers you to detect and remove silence in audio recordings. Additionally, it provides functionality to facilitate video silence removal using the generated text files.
+Audio DeSilencer is a powerful Python package for audio processing that empowers you to detect and remove silence in audio recordings. Additionally, it provides functionality to facilitate video silence removal using the generated text files.
 
 ## Features
 
@@ -10,32 +10,32 @@ AudioDeSilencer is a powerful Python package for audio processing that empowers 
 
 - **Text File Generation**: Create text files containing the timeline data of silent and non-silent parts, facilitating further processing for video silence removal or in-depth analysis.
 
-- **Command-Line Interface**: Seamlessly integrate AudioDeSilencer into your audio and video processing pipelines with an intuitive command-line interface.
+- **Command-Line Interface**: Seamlessly integrate Audio DeSilencer into your audio and video processing pipelines with an intuitive command-line interface.
 
 ## Installation
 
 ### Installation via pip
 
-To install AudioDeSilencer using pip, simply run:
+To install Audio DeSilencer using pip, simply run:
 
 ```bash
-pip install AudioDeSilencer
+pip install audio_desilencer
 ```
 
 ### Manual Installation
 
-If you prefer not to use pip, you can manually install AudioDeSilencer by following these steps:
+If you prefer not to use pip, you can manually install Audio DeSilencer by following these steps:
 
-1. Clone the AudioDeSilencer repository:
+1. Clone the Audio DeSilencer repository:
 
    ```bash
-   git clone https://github.com/yourusername/AudioDeSilencer.git
+   git clone https://github.com/BTawaifi/Audio_DeSilencer.git
    ```
 
 2. Navigate to the project directory:
 
    ```bash
-   cd AudioDeSilencer
+   cd Audio_DeSilencer
    ```
 
 3. Install the required dependencies:
@@ -44,7 +44,7 @@ If you prefer not to use pip, you can manually install AudioDeSilencer by follow
    pip install -r requirements.txt
    ```
 
-4. Now, you can run AudioDeSilencer from the command line:
+4. Now, you can run Audio DeSilencer from the command line:
 
    ```bash
    python audio_desilencer.py input_audio.mp3 --output_folder output_directory --min_silence_len 100 --threshold -30
@@ -59,7 +59,7 @@ If you prefer not to use pip, you can manually install AudioDeSilencer by follow
 
 ### Output
 
-AudioDeSilencer will generate the following output:
+Audio DeSilencer will generate the following output:
 
 - `interview_silent.mp3`: Audio file with silence segments removed.
 - `interview_non_silent.mp3`: Audio file containing only the non-silent parts.
@@ -76,7 +76,7 @@ python audio_desilencer.py input_audio.mp3 --output_folder output_directory --mi
 
 ## Contributing
 
-Contributions to AudioDeSilencer are highly encouraged! Whether you'd like to report issues or submit pull requests to enhance the tool, your contributions are invaluable. Please refer to the [CONTRIBUTING](CONTRIBUTING.md) guide for details on how to contribute.
+Contributions to Audio DeSilencer are highly encouraged! Whether you'd like to report issues or submit pull requests to enhance the tool, your contributions are invaluable. Please refer to the [CONTRIBUTING](CONTRIBUTING.md) guide for details on how to contribute.
 
 ## License
 

@@ -19,8 +19,14 @@ Audio DeSilencer is a powerful Python package for audio processing that empowers
 To install Audio DeSilencer using pip, simply run:
 
 ```bash
-pip install audio_desilencer
+pip install audio-desilencer
 ```
+
+Now, you can run Audio DeSilencer from the command line:
+
+   ```bash
+   audio-desilencer input_audio.mp3 --output_folder output_directory --min_silence_len 100 --threshold -30
+   ```
 
 ### Manual Installation
 
@@ -29,13 +35,13 @@ If you prefer not to use pip, you can manually install Audio DeSilencer by follo
 1. Clone the Audio DeSilencer repository:
 
    ```bash
-   git clone https://github.com/BTawaifi/Audio_DeSilencer.git
+   git clone https://github.com/BTawaifi/Audio-DeSilencer.git
    ```
 
 2. Navigate to the project directory:
 
    ```bash
-   cd Audio_DeSilencer
+   cd Audio-DeSilencer
    ```
 
 3. Install the required dependencies:
@@ -47,7 +53,7 @@ If you prefer not to use pip, you can manually install Audio DeSilencer by follo
 4. Now, you can run Audio DeSilencer from the command line:
 
    ```bash
-   python audio_desilencer.py input_audio.mp3 --output_folder output_directory --min_silence_len 100 --threshold -30
+   python audio-desilencer.py input_audio.mp3 --output_folder output_directory --min_silence_len 100 --threshold -30
    ```
 
 ### Command-Line Arguments
@@ -71,7 +77,13 @@ Audio DeSilencer will generate the following output:
 Here's a usage example to get you started:
 
 ```bash
-python audio_desilencer.py input_audio.mp3 --output_folder output_directory --min_silence_len 100 --threshold -30
+python audio-desilencer.py input_audio.mp3 --output_folder output_directory --min_silence_len 100 --threshold -30
+```
+
+Or if you have it installed using pip
+
+```bash
+audio-desilencer input_audio.mp3 --output_folder output_directory --min_silence_len 100 --threshold -30
 ```
 
 ## Contributing

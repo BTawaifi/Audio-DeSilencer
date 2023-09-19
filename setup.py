@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='AudioDeSilencer',
-    version='0.1',
+    version='1.0',
     description='An audio processing tool for detecting and removing silence in audio recordings.',
     author='Boutros Tawaifi',
     author_email='boutrous.m.tawaifi@gmail.com',

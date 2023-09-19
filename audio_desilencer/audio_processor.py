@@ -17,8 +17,10 @@ class AudioProcessor:
 
     def save_timeline_to_text(self, timeline_data, output_path):
         with open(output_path, 'w') as file:
+            file.write("[")
             for start, end in timeline_data:
-                file.write(f"Start: {start} ms, End: {end} ms\n")
+                file.write(f"({start}, {end}), ")
+            file.write("]")
         print(f"Saved timeline data to {output_path}")
 
     def process_audio(self, min_silence_len=100, threshold=-30, output_folder='output'):

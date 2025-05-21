@@ -10,7 +10,41 @@ Audio DeSilencer is a powerful Python package for audio processing that empowers
 
 - **Text File Generation**: Create text files containing the timeline data of silent and non-silent parts, facilitating further processing for video silence removal or in-depth analysis.
 
+- **Wide Format Support**: Now supports a wider range of audio formats, including MP4A, OGG, FLAC, WAV, MP3, and more, as supported by FFmpeg, thanks to automatic format detection.
+
 - **Command-Line Interface**: Seamlessly integrate Audio DeSilencer into your audio and video processing pipelines with an intuitive command-line interface.
+
+### Checking for Full Silence
+
+The `AudioProcessor` class now includes a method to check if an audio file is completely silent.
+
+**`is_fully_silent(min_silence_len=100, threshold=-30)`**
+
+-   `min_silence_len` (int): The minimum duration (in milliseconds) that a segment of audio must have to be considered non-silent. Default is 100 ms.
+-   `threshold` (int): The audio level (in dBFS) below which audio is considered silent. Default is -30 dBFS.
+-   **Returns**: `True` if no non-silent segments are found (i.e., the entire audio is below the `threshold` for durations longer than `min_silence_len`), `False` otherwise.
+
+**Example:**
+
+```python
+from audio_desilencer.audio_processor import AudioProcessor
+
+# Initialize the processor with your audio file
+# Supports MP4A, WAV, MP3, and other ffmpeg-supported formats
+processor = AudioProcessor("path/to/your/audiofile.m4a")
+
+# Check if the audio is fully silent using default parameters
+if processor.is_fully_silent():
+    print("The audio file is completely silent.")
+else:
+    print("The audio file contains non-silent parts.")
+
+# Or with custom parameters
+if processor.is_fully_silent(min_silence_len=200, threshold=-40):
+    print("The audio file is completely silent (using custom settings).")
+else:
+    print("The audio file contains non-silent parts (using custom settings).")
+```
 
 ## Installation
 

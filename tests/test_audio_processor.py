@@ -1,8 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from audio_desilencer.audio_processor import AudioProcessor
-# Import pydub.silence if you are directly patching detect_nonsilent from there
-# from pydub.silence import detect_nonsilent
+
 
 class TestAudioProcessor(unittest.TestCase):
 
@@ -49,12 +48,6 @@ class TestAudioProcessor(unittest.TestCase):
 
         # Assert that from_file was called correctly (without format)
         mock_from_file.assert_called_once_with("dummy.m4a")
-        # Check that 'format' was not in the kwargs or was None
-        # called_args, called_kwargs = mock_from_file.call_args
-        # self.assertNotIn('format', called_kwargs) # This is one way
-        # Or, more simply, if no other args are expected:
-        # self.assertEqual(called_args, ("dummy.m4a",))
-        # self.assertEqual(called_kwargs, {})
 
 
 if __name__ == '__main__':

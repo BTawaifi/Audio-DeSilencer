@@ -14,7 +14,6 @@ setup(
     packages=find_packages(),
     install_requires=[
         'pydub',
-        'argparse',
     ],
     entry_points={
         'console_scripts': [

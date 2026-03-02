@@ -170,6 +170,38 @@ class TestAudioProcessor(unittest.TestCase):
             self.assertIn(expected_non_silent_raw, actual_spawn_data)
             self.assertIn(expected_silent_raw, actual_spawn_data)
 
+    @patch('audio_desilencer.audio_processor.AudioProcessor')
+    @patch('sys.argv', ['audio_desilencer', 'input.mp3', '--output_folder', 'test_out', '--min_silence_len', '200', '--threshold', '-40'])
+    def test_main_custom_args(self, mock_audio_processor):
+        from audio_desilencer.audio_processor import main
+        mock_processor_instance = MagicMock()
+        mock_audio_processor.return_value = mock_processor_instance
+
+        main()
+
+        mock_audio_processor.assert_called_once_with('input.mp3')
+        mock_processor_instance.process_audio.assert_called_once_with(
+            min_silence_len=200,
+            threshold=-40,
+            output_folder='test_out'
+        )
+
+    @patch('audio_desilencer.audio_processor.AudioProcessor')
+    @patch('sys.argv', ['audio_desilencer', 'input.mp3'])
+    def test_main_defaults(self, mock_audio_processor):
+        from audio_desilencer.audio_processor import main
+        mock_processor_instance = MagicMock()
+        mock_audio_processor.return_value = mock_processor_instance
+
+        main()
+
+        mock_audio_processor.assert_called_once_with('input.mp3')
+        mock_processor_instance.process_audio.assert_called_once_with(
+            min_silence_len=100,
+            threshold=-30,
+            output_folder='output'
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

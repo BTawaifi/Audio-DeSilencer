@@ -33,17 +33,13 @@ class AudioProcessor:
         try:
             print("Processing audio...")
             non_silent_parts = self.split_audio_by_silence(min_silence_len, threshold)
-
-            # Use lists to store segments instead of incrementally appending
-            # with += which causes O(N^2) time complexity due to creating a new
-            # AudioSegment instance every time.
-            audio_silent_segments = []
-            audio_non_silent_segments = []
+            silent_segments = []
+            non_silent_segments = []
             silent_parts_times = []
             non_silent_parts_times = []
 
             for i, (start_time, end_time) in enumerate(non_silent_parts):
-                audio_non_silent_segments.append(self.audio[start_time:end_time])
+                non_silent_segments.append(self.audio[start_time:end_time])
                 non_silent_parts_times.append((start_time, end_time))
 
                 if i == 0:
@@ -52,21 +48,19 @@ class AudioProcessor:
                     silent_start_time = non_silent_parts[i - 1][1]
                 silent_end_time = start_time
 
-                audio_silent_segments.append(self.audio[silent_start_time:silent_end_time])
+                silent_segments.append(self.audio[silent_start_time:silent_end_time])
                 silent_parts_times.append((silent_start_time, silent_end_time))
 
-            # Note: the original code did not append the final trailing silence
-            # segment after the last non-silent part. To preserve original exact
-            # behavior, we do not append it here either.
+            # Concatenate the audio segments efficiently by joining raw data
+            if silent_segments:
+                audio_silent = self.audio._spawn(b"".join(s.raw_data for s in silent_segments))
+            else:
+                audio_silent = AudioSegment.empty()
 
-            # Fast concatenation by joining the underlying bytes data
-            def _join_segments(segments):
-                if not segments:
-                    return AudioSegment.empty()
-                return segments[0]._spawn(b''.join(s._data for s in segments))
-
-            audio_silent = _join_segments(audio_silent_segments)
-            audio_non_silent = _join_segments(audio_non_silent_segments)
+            if non_silent_segments:
+                audio_non_silent = self.audio._spawn(b"".join(s.raw_data for s in non_silent_segments))
+            else:
+                audio_non_silent = AudioSegment.empty()
 
             # Create the output folder if it doesn't exist
             os.makedirs(output_folder, exist_ok=True)

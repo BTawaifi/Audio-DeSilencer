@@ -192,6 +192,24 @@ class TestAudioProcessor(unittest.TestCase):
             self.assertIn(expected_non_silent_raw, actual_spawn_data)
             self.assertIn(expected_silent_raw, actual_spawn_data)
 
+    @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
+    @patch('audio_desilencer.audio_processor.detect_nonsilent')
+    @patch('builtins.print')
+    def test_process_audio_exception(self, mock_print, mock_detect_nonsilent, mock_from_file):
+        # Configure mocks
+        mock_audio_segment = MagicMock()
+        mock_from_file.return_value = mock_audio_segment
+        mock_detect_nonsilent.side_effect = Exception("Test exception")
+
+        # Instantiate AudioProcessor
+        processor = AudioProcessor("dummy.mp3")
+
+        # Call process_audio
+        processor.process_audio()
+
+        # Verify print was called with the exception message
+        mock_print.assert_any_call("An error occurred:", "Test exception")
+
     @patch('audio_desilencer.audio_processor.AudioProcessor')
     @patch('sys.argv', ['audio_desilencer', 'input.mp3', '--output_folder', 'test_out', '--min_silence_len', '200', '--threshold', '-40'])
     def test_main_custom_args(self, mock_audio_processor):

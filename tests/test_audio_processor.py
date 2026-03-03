@@ -225,5 +225,76 @@ class TestAudioProcessor(unittest.TestCase):
         )
 
 
+
+
+    @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
+    @patch('audio_desilencer.audio_processor.detect_nonsilent')
+    @patch('audio_desilencer.audio_processor.AudioSegment.empty')
+    @patch('audio_desilencer.audio_processor.os.makedirs')
+    def test_process_audio_fully_silent(self, mock_makedirs, mock_empty, mock_detect_nonsilent, mock_from_file):
+        mock_audio = MagicMock()
+        mock_from_file.return_value = mock_audio
+        mock_detect_nonsilent.return_value = []
+
+        mock_empty_segment = MagicMock()
+        mock_empty.return_value = mock_empty_segment
+
+        processor = AudioProcessor("dummy.mp3")
+
+        with patch.object(processor, 'save_audio') as mock_save_audio, \
+             patch.object(processor, 'save_timeline_to_text') as mock_save_timeline:
+            processor.process_audio()
+
+            mock_detect_nonsilent.assert_called_once()
+            self.assertEqual(mock_empty.call_count, 2)
+            self.assertEqual(mock_save_audio.call_count, 2)
+            self.assertEqual(mock_save_timeline.call_count, 2)
+
+    @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
+    @patch('audio_desilencer.audio_processor.detect_nonsilent')
+    @patch('audio_desilencer.audio_processor.AudioSegment.empty')
+    @patch('audio_desilencer.audio_processor.os.makedirs')
+    def test_process_audio_fully_non_silent(self, mock_makedirs, mock_empty, mock_detect_nonsilent, mock_from_file):
+        mock_audio = MagicMock()
+        mock_from_file.return_value = mock_audio
+        mock_detect_nonsilent.return_value = [[0, 1000]]
+
+        def get_slice(s):
+            m = MagicMock()
+            m.raw_data = b"data_" + str(s.start).encode() + b"_" + str(s.stop).encode()
+            return m
+        mock_audio.__getitem__.side_effect = get_slice
+
+        mock_empty_segment = MagicMock()
+        mock_empty.return_value = mock_empty_segment
+
+        processor = AudioProcessor("dummy.mp3")
+
+        with patch.object(processor, 'save_audio') as mock_save_audio, \
+             patch.object(processor, 'save_timeline_to_text') as mock_save_timeline:
+            processor.process_audio()
+
+            mock_detect_nonsilent.assert_called_once()
+            # Ensure output methods are invoked
+            self.assertEqual(mock_save_audio.call_count, 2)
+            self.assertEqual(mock_save_timeline.call_count, 2)
+
+    @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
+    @patch('audio_desilencer.audio_processor.detect_nonsilent')
+    @patch('builtins.print')
+    def test_process_audio_exception(self, mock_print, mock_detect_nonsilent, mock_from_file):
+        mock_audio = MagicMock()
+        mock_from_file.return_value = mock_audio
+        mock_detect_nonsilent.side_effect = Exception("Test Exception")
+
+        processor = AudioProcessor("dummy.mp3")
+
+        processor.process_audio()
+
+        # Relax the assertion to just check if 'An error occurred' is in the printed output
+        self.assertTrue(mock_print.called)
+        self.assertTrue('An error occurred' in str(mock_print.call_args[0][0]))
+
+
 if __name__ == '__main__':
     unittest.main()

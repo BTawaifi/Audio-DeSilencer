@@ -16,7 +16,7 @@ setup(
     install_requires=[],
     entry_points={
         "console_scripts": [
-            "audio-desilencer=audio_desilencer.audio_processor:main",
+            "audio-desilencer=audio_desilencer.cli:main",
         ],
     },
     keywords=["audio", "processing", "silence removal", "pause removal", "ffmpeg"],

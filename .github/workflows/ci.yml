@@ -26,8 +26,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Verify FFmpeg
+      - name: Install FFmpeg
         run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
           ffmpeg -version
           ffprobe -version
 

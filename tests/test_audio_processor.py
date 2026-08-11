@@ -15,6 +15,8 @@ from audio_desilencer.audio_processor import (
     _normalize_ranges,
     build_removal_ranges,
     complement_ranges,
+    detect_silence_from_levels,
+    estimate_adaptive_threshold,
     main,
 )
 import audio_desilencer.audio_processor as module
@@ -36,6 +38,20 @@ def write_test_wav(path: Path, sections, sample_rate: int = 8000) -> None:
         handle.setsampwidth(2)
         handle.setframerate(sample_rate)
         handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
+def write_stereo_test_wav(path: Path, left_amp: float, right_amp: float, duration_ms: int = 500, sample_rate: int = 8000):
+    frames = []
+    count = int(sample_rate * duration_ms / 1000)
+    for index in range(count):
+        left = int(32767 * left_amp * math.sin(2 * math.pi * 440 * index / sample_rate)) if left_amp else 0
+        right = int(32767 * right_amp * math.sin(2 * math.pi * 440 * index / sample_rate)) if right_amp else 0
+        frames.extend((left, right))
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate)
+        handle.writeframes(struct.pack(f"<{len(frames)}h", *frames))
 
 
 def decode_f32(path: Path) -> bytes:
@@ -76,6 +92,48 @@ class RangeTests(unittest.TestCase):
             build_removal_ranges(1000, [(0, 500)], -1)
 
 
+class DeterministicDetectorTests(unittest.TestCase):
+    def test_adaptive_threshold_uses_quiet_percentile_and_bounds(self):
+        levels = [-52.0] * 40 + [-20.0] * 60
+        self.assertAlmostEqual(estimate_adaptive_threshold(levels), -44.0)
+        self.assertEqual(estimate_adaptive_threshold([-100.0] * 100), -55.0)
+        self.assertEqual(estimate_adaptive_threshold([-31.0] * 100), -38.0)
+
+    def test_hysteresis_prevents_threshold_flutter_from_ending_silence(self):
+        frames = [
+            (0, 20, -45.0),
+            (20, 40, -44.0),
+            (40, 60, -39.0),
+            (60, 80, -37.0),
+            (80, 100, -40.0),
+            (100, 120, -20.0),
+        ]
+        ranges = detect_silence_from_levels(
+            frames,
+            min_silence_len=40,
+            enter_threshold_dbfs=-38.0,
+            hysteresis_db=3.0,
+            total_duration_ms=120,
+        )
+        self.assertEqual(ranges, [(0, 100)])
+
+    def test_unconfirmed_quiet_run_is_not_bridged_by_hysteresis(self):
+        frames = [
+            (0, 20, -45.0),
+            (20, 40, -30.0),
+            (40, 60, -45.0),
+            (60, 80, -45.0),
+        ]
+        ranges = detect_silence_from_levels(
+            frames,
+            min_silence_len=40,
+            enter_threshold_dbfs=-38.0,
+            hysteresis_db=3.0,
+            total_duration_ms=80,
+        )
+        self.assertEqual(ranges, [(40, 80)])
+
+
 class AudioProcessorTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -101,6 +159,37 @@ class AudioProcessorTests(unittest.TestCase):
         self.assertEqual(len(nonsilent), 1)
         self.assertLessEqual(abs(nonsilent[0][0] - 200), 10)
         self.assertLessEqual(abs(nonsilent[0][1] - 500), 10)
+
+    def test_adaptive_detection_is_deterministic_and_reports_resolved_threshold(self):
+        source = self.root / "adaptive.wav"
+        write_test_wav(source, [
+            (800, 0.003, 120),
+            (400, 0.7, 440),
+            (800, 0.003, 120),
+        ])
+        processor = AudioProcessor(source)
+        result = processor.process_audio(
+            min_silence_len=500,
+            threshold="auto",
+            target_silence_len=100,
+            output_folder=self.root / "adaptive_out",
+            output_format="wav",
+        )
+        self.assertEqual(result.detector, "adaptive")
+        self.assertIsNotNone(result.resolved_threshold_dbfs)
+        self.assertLessEqual(result.resolved_threshold_dbfs, -38.0)
+        self.assertGreater(len(result.detected_silence_ranges), 0)
+
+    def test_stereo_policy_requires_all_channels_to_be_quiet(self):
+        source = self.root / "stereo.wav"
+        write_stereo_test_wav(source, left_amp=0.0, right_amp=0.8)
+        processor = AudioProcessor(source)
+        fixed = processor.detect_silence_ranges(min_silence_len=100, threshold=-30)
+        self.assertEqual(fixed, [])
+
+        frames = processor._measure_frame_levels()
+        self.assertTrue(frames)
+        self.assertGreater(max(level for _, _, level in frames), -10.0)
 
     def test_is_fully_silent_and_non_silent(self):
         silent_path = self.root / "silent.wav"
@@ -132,6 +221,8 @@ class AudioProcessorTests(unittest.TestCase):
         self.assertEqual(result.silent_ranges, ((0, 150), (550, 1450), (1850, 2000)))
         self.assertEqual(result.non_silent_ranges, ((150, 550), (1450, 1850)))
         self.assertEqual(result.detected_silence_ranges, ((0, 200), (500, 1500), (1800, 2000)))
+        self.assertEqual(result.detector, "ffmpeg")
+        self.assertEqual(result.resolved_threshold_dbfs, -30.0)
         self.assertTrue(Path(result.non_silent_audio_path).is_file())
         self.assertTrue(Path(result.silent_audio_path).is_file())
 
@@ -184,6 +275,19 @@ class AudioProcessorTests(unittest.TestCase):
         for actual, expected in zip(decoded[:5], values[:5]):
             self.assertAlmostEqual(actual, expected, places=6)
 
+    def test_large_edit_graph_uses_filter_script_to_avoid_command_length_limits(self):
+        source = self.root / "long.wav"
+        write_test_wav(source, [(10000, 0.5, 440)])
+        processor = AudioProcessor(source)
+        ranges = [(index * 40, index * 40 + 20) for index in range(200)]
+        output = self.root / "many.wav"
+        with patch.object(processor, "_run") as run:
+            processor._render_ranges(ranges, output, "wav")
+        command = run.call_args.args[0]
+        self.assertIn("-filter_complex_script", command)
+        script_index = command.index("-filter_complex_script") + 1
+        self.assertFalse(Path(command[script_index]).exists(), "temporary filter script should be cleaned up")
+
     def test_process_custom_stem_cannot_escape_output_directory(self):
         source = self.root / "input.wav"
         write_test_wav(source, [(300, 0.8, 440)])
@@ -205,6 +309,10 @@ class AudioProcessorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             processor.process_audio(target_silence_len=-1)
         with self.assertRaises(ValueError):
+            processor.process_audio(hysteresis_db=-1)
+        with self.assertRaises(ValueError):
+            processor.process_audio(threshold="banana")
+        with self.assertRaises(ValueError):
             processor.process_audio(output_format="../mp3")
 
     def test_save_timeline_writes_valid_python_literal(self):
@@ -224,7 +332,8 @@ class CliTests(unittest.TestCase):
             "input.wav",
             "--output_folder", "out",
             "--min_silence_len", "700",
-            "--threshold", "-38",
+            "--threshold", "auto",
+            "--hysteresis_db", "4",
             "--target_silence_len", "120",
             "--output_format", "wav",
             "--output_stem", "cleaned",
@@ -233,8 +342,9 @@ class CliTests(unittest.TestCase):
         processor_cls.assert_called_once_with("input.wav")
         processor.process_audio.assert_called_once_with(
             min_silence_len=700,
-            threshold=-38.0,
+            threshold="auto",
             target_silence_len=120,
+            hysteresis_db=4.0,
             output_folder="out",
             output_format="wav",
             output_stem="cleaned",

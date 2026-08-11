@@ -14,6 +14,23 @@ class TestAudioProcessor(unittest.TestCase):
 
     @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
     @patch('audio_desilencer.audio_processor.detect_nonsilent')
+    def test_split_audio_by_silence(self, mock_detect_nonsilent, mock_from_file):
+        # Configure mocks
+        mock_audio_segment = MagicMock()
+        mock_from_file.return_value = mock_audio_segment
+        mock_detect_nonsilent.return_value = [[0, 1000], [2000, 3000]]
+
+        # Instantiate AudioProcessor
+        processor = AudioProcessor("dummy.mp4a")
+
+        # Call split_audio_by_silence and assert
+        result = processor.split_audio_by_silence(min_silence_len=500, threshold=-40)
+        self.assertEqual(result, [[0, 1000], [2000, 3000]])
+        mock_from_file.assert_called_once_with("dummy.mp4a")
+        mock_detect_nonsilent.assert_called_once_with(mock_audio_segment, min_silence_len=500, silence_thresh=-40)
+
+    @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
+    @patch('audio_desilencer.audio_processor.detect_nonsilent')
     def test_is_fully_silent_when_audio_is_silent(self, mock_detect_nonsilent, mock_from_file):
         # Configure mocks
         mock_audio_segment = MagicMock()

@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as readme_file:
 
 setup(
     name="Audio-DeSilencer",
-    version="1.0.3",
+    version="1.1.0",
     description="A non-destructive FFmpeg-backed silence remover for speech and general audio.",
     author="Boutros Tawaifi",
     author_email="boutrous.m.tawaifi@gmail.com",
@@ -16,7 +16,7 @@ setup(
     install_requires=[],
     entry_points={
         "console_scripts": [
-            "audio-desilencer=audio_desilencer.audio_processor:main",
+            "audio-desilencer=audio_desilencer.cli:main",
         ],
     },
     keywords=["audio", "processing", "silence removal", "pause removal", "ffmpeg"],

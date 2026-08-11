@@ -1,101 +1,148 @@
 # Audio DeSilencer
 
-Audio DeSilencer is a small Python package and CLI for detecting silent/non-silent regions, separating those regions into output audio files, and exporting the corresponding timelines.
+Audio DeSilencer is a small Python package and CLI for shortening long silent pauses **without processing the audio you keep**.
+
+The core invariant is simple:
+
+> If a source interval is retained, Audio DeSilencer does not normalize, limit, EQ, compress, de-ess, crossfade, or otherwise modify it. Only selected time ranges are removed.
 
 ```bash
 pip install audio-desilencer
 ```
 
-## Features
+## Why this design
 
-- Detect non-silent ranges with configurable dBFS and minimum-silence thresholds
-- Correctly derive the complete silent complement, including leading and trailing silence
-- Handle fully silent and fully non-silent files without dropping audio
-- Export separate silent and non-silent audio files
-- Export the exact silent/non-silent millisecond timelines
-- Choose the output codec/extension instead of forcing every result to MP3
-- Use either the Python API or the `audio-desilencer` CLI
-- Return a structured `ProcessingResult` to Python callers
+Silence removal is an editing problem, not a mastering problem. The processor therefore treats the source recording as authoritative:
 
-Codec support is provided by pydub/FFmpeg. Formats that require FFmpeg still depend on FFmpeg being installed and available on the host system.
+```text
+source audio
+    │
+    ├── detect confirmed long silence
+    │
+    ├── keep a small natural pause around speech
+    │
+    ├── remove only the middle of each accepted silence
+    │
+    └── concatenate the untouched retained source spans
+```
 
-## Silence model
+The processing backend is FFmpeg end-to-end. Audio is not first converted through pydub's integer `AudioSegment` representation, which avoids hard-clipping over-range floating-point samples from formats such as Opus before editing begins.
 
-Silence detection is controlled by:
+## Requirements
 
-- `threshold`: audio below this dBFS level is considered silent
-- `min_silence_len`: minimum duration in milliseconds before a region counts as silence
+- Python 3.10+
+- `ffmpeg` and `ffprobe` available on `PATH`
 
-The processor first obtains non-silent ranges and then computes their complement across the full audio duration. That means leading, internal, and trailing silence are represented consistently.
+No third-party Python runtime packages are required.
+
+## Defaults
+
+The defaults are intentionally conservative for speech:
+
+```text
+minimum continuous silence: 700 ms
+silence threshold:           -38 dBFS
+silence retained per pause:   150 ms
+output format:                WAV
+```
+
+A 1.5-second pause, for example, is shortened to roughly 150 ms. Speech on either side remains untouched.
 
 ## CLI
 
 ```bash
-audio-desilencer input_audio.mp3 \
+audio-desilencer input.ogg \
   --output_folder output \
-  --min_silence_len 100 \
-  --threshold -30 \
-  --output_format mp3
+  --min_silence_len 700 \
+  --threshold -38 \
+  --target_silence_len 150 \
+  --output_format wav
 ```
+
+Use `--target_silence_len 0` to remove accepted silence completely. Keeping a small value is usually more natural for speech because edits remain inside quiet material instead of landing directly on word boundaries.
 
 Optional custom output stem:
 
 ```bash
-audio-desilencer interview.m4a --output_stem cleaned --output_format wav
+audio-desilencer interview.m4a --output_stem cleaned
 ```
 
-For an input named `interview.m4a`, the default output names are:
+For `interview.m4a`, the default WAV outputs are:
 
 ```text
-interview_silent.mp3
-interview_non_silent.mp3
+interview_silent.wav
+interview_non_silent.wav
 interview_silent_parts.txt
 interview_non_silent_parts.txt
 ```
 
-The CLI returns a non-zero exit status when loading or processing fails instead of printing an error and appearing successful.
+`*_non_silent` is the desilenced recording. It still contains the small amount of pause requested by `target_silence_len`.
+
+`*_silent` contains only the material actually removed from the source, not every low-energy sample detected near speech boundaries.
 
 ## Python API
 
 ```python
 from audio_desilencer import AudioProcessor
 
-processor = AudioProcessor("input.m4a")
+processor = AudioProcessor("input.ogg")
 result = processor.process_audio(
-    min_silence_len=200,
-    threshold=-40,
+    min_silence_len=700,
+    threshold=-38,
+    target_silence_len=150,
     output_folder="output",
     output_format="wav",
 )
 
-print(result.silent_ranges)
-print(result.non_silent_ranges)
+print(result.detected_silence_ranges)
+print(result.silent_ranges)       # ranges actually removed
+print(result.non_silent_ranges)   # source ranges retained in the output
 print(result.non_silent_audio_path)
 ```
 
-You can also use the detection layer directly:
+The legacy detection method remains available:
 
 ```python
-segments = processor.split_audio_by_silence(
-    min_silence_len=200,
-    threshold=-40,
+non_silent_source_ranges = processor.split_audio_by_silence(
+    min_silence_len=700,
+    threshold=-38,
 )
-
-if processor.is_fully_silent():
-    print("No non-silent audio detected")
 ```
 
-`process_audio()` raises processing errors to Python callers. Friendly error reporting is kept at the CLI boundary so library code can reliably distinguish success from failure.
+For direct silence inspection:
 
-## Timeline format
+```python
+silent_ranges = processor.detect_silence_ranges(
+    min_silence_len=700,
+    threshold=-38,
+)
+```
 
-Timeline files contain a Python-literal list of `(start_ms, end_ms)` tuples:
+## Timeline semantics
+
+Timeline files contain Python-literal `(start_ms, end_ms)` tuples in **source time**.
 
 ```text
-[(0, 1200), (3400, 5100)]
+[(9824, 10599), (19576, 20330)]
 ```
 
-Ranges are clamped, sorted, merged when necessary, and never include zero-length intervals.
+- `silent_parts.txt` contains ranges actually removed.
+- `non_silent_parts.txt` contains source ranges retained in the desilenced output.
+- `ProcessingResult.detected_silence_ranges` exposes the full silence regions detected before pause shortening.
+
+## Signal preservation
+
+Audio DeSilencer deliberately performs no gain or tone processing.
+
+The FFmpeg render graph only uses timing operations:
+
+```text
+atrim -> timestamp reset -> concat
+```
+
+For WAV output, the package writes 32-bit floating-point PCM. This preserves over-range floating-point source samples instead of forcing them through an integer PCM ceiling. No attenuation or normalization is applied.
+
+Lossy formats such as MP3 must be re-encoded and therefore cannot be sample-identical to the source. Use WAV when validating editing quality or when you want a lossless intermediate.
 
 ## Architecture
 
@@ -104,60 +151,45 @@ CLI / Python caller
         │
         ▼
 AudioProcessor
-├── load through pydub
-├── detect non-silent ranges
-├── normalize ranges
-├── compute silent complement over full duration
-├── concatenate selected source slices
-├── export audio
-└── write timing metadata
-        │
-        ▼
-FFmpeg-backed codec support where required
+├── ffprobe source metadata
+├── FFmpeg continuous-silence detection
+├── normalize detected ranges
+├── build removal ranges from the middle of silence
+├── compute retained source ranges
+├── FFmpeg trim + concatenate retained spans
+├── export removed spans separately
+└── write source-time timelines
 ```
 
-The processing layer is shared by the CLI and Python API. Output naming is derived from the input stem by default, so processing multiple files into the same output folder does not overwrite a generic `interview_*` filename.
+This avoids the previous architecture of extracting independent speech chunks and blindly joining their raw PCM bytes at detector boundaries.
 
 ## Testing
 
-The regression suite contains both pure interval tests and tests that use real pydub `AudioSegment` data. It specifically covers:
+```bash
+python -m unittest discover -s tests -v
+```
+
+The regression suite covers:
 
 - leading, internal, and trailing silence
-- fully silent audio
-- fully non-silent audio
-- range clamping/sorting/merging
-- real tone-vs-silence detection
-- output naming and codec selection
+- fully silent and fully non-silent files
+- conservative middle-of-pause removal
+- source/removed/retained range semantics
+- real FFmpeg silence detection on synthetic audio
+- over-range float WAV preservation
+- byte-for-byte equality of retained decoded PCM on lossless fixtures
+- output naming and path containment
 - timeline serialization
-- CLI success/failure exit behavior
-- package API behavior
+- CLI success/failure behavior
 
-Run locally:
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-GitHub Actions runs the suite on Python 3.10, 3.11, 3.12, and 3.13. A separate packaging job builds the wheel/source distribution, installs the wheel, verifies imports, and exercises the installed CLI.
-
-## Development
-
-```bash
-git clone https://github.com/BTawaifi/Audio-DeSilencer.git
-cd Audio-DeSilencer
-python -m pip install -e .
-python -m unittest discover -s tests -v
-```
-
-The package declares Python 3.10+ support and excludes the repository's `tests` package from built distributions.
+GitHub Actions runs the suite on Python 3.10, 3.11, 3.12, and 3.13 and separately builds and installs the wheel/source distribution.
 
 ## Scope / limitations
 
-- Threshold-based silence detection is deterministic and explainable but not semantic voice-activity detection.
-- Results still depend on choosing a threshold appropriate for the recording.
-- File-based processing keeps decoded audio in memory; it is not a streaming engine.
-- Codec availability depends on the local pydub/FFmpeg environment.
-- The optimized concatenation path joins raw slices from the same source audio and therefore assumes matching audio parameters, which is true for slices produced by this processor.
+- Detection is threshold-based, deterministic, and explainable; it is not semantic voice-activity detection.
+- Thresholds still need to match the recording environment. Quiet speech below the selected threshold can still be classified as silence, so conservative settings are recommended.
+- The current production path does not normalize loudness or repair already-clipped source audio by design.
+- FFmpeg codec support depends on the FFmpeg build installed on the host.
 
 ## License
 

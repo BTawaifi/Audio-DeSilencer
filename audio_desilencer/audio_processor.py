@@ -81,7 +81,7 @@ class AudioProcessor:
             print("Silent parts timeline saved to:", silent_txt_path)
             print("Non-silent parts timeline saved to:", non_silent_txt_path)
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             print("An error occurred:", str(e))
 
 def main():

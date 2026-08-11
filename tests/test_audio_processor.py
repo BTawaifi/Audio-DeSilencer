@@ -56,6 +56,56 @@ class TestAudioProcessor(unittest.TestCase):
         # self.assertEqual(called_args, ("dummy.m4a",))
         # self.assertEqual(called_kwargs, {})
 
+    @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
+    @patch('audio_desilencer.audio_processor.detect_nonsilent')
+    @patch('audio_desilencer.audio_processor.AudioSegment.empty')
+    @patch('audio_desilencer.audio_processor.os.makedirs')
+    def test_process_audio_logic(self, mock_makedirs, mock_empty, mock_detect_nonsilent, mock_from_file):
+        # Configure mocks
+        mock_audio = MagicMock()
+        mock_from_file.return_value = mock_audio
+        mock_detect_nonsilent.return_value = [[100, 200], [400, 500]]
+
+        # Mock AudioSegment slices to have 'raw_data'
+        def get_slice(s):
+            m = MagicMock()
+            m.raw_data = b"data_" + str(s.start).encode() + b"_" + str(s.stop).encode()
+            return m
+        mock_audio.__getitem__.side_effect = get_slice
+
+        mock_empty_segment = MagicMock()
+        mock_empty.return_value = mock_empty_segment
+
+        # Instantiate AudioProcessor
+        processor = AudioProcessor("dummy.mp3")
+
+        # Call process_audio
+        with patch.object(processor, 'save_audio') as mock_save_audio, \
+             patch.object(processor, 'save_timeline_to_text') as mock_save_timeline:
+            processor.process_audio()
+
+            # Verify detect_nonsilent call
+            mock_detect_nonsilent.assert_called_once()
+
+            # Verify slices (non_silent: [100:200], [400:500], silent: [0:100], [200:400])
+            expected_slices = [slice(100, 200), slice(0, 100), slice(400, 500), slice(200, 400)]
+            actual_slices = [call.args[0] for call in mock_audio.__getitem__.call_args_list]
+            self.assertEqual(len(actual_slices), 4)
+            for s in expected_slices:
+                self.assertIn(s, actual_slices)
+
+            # Verify raw data concatenation and _spawn calls
+            # non_silent raw data: b"data_100_200" + b"data_400_500"
+            # silent raw data: b"data_0_100" + b"data_200_400"
+            expected_non_silent_raw = b"data_100_200data_400_500"
+            expected_silent_raw = b"data_0_100data_200_400"
+
+            spawn_calls = mock_audio._spawn.call_args_list
+            self.assertEqual(len(spawn_calls), 2)
+            actual_spawn_data = [call.args[0] for call in spawn_calls]
+            self.assertIn(expected_non_silent_raw, actual_spawn_data)
+            self.assertIn(expected_silent_raw, actual_spawn_data)
+
 
 if __name__ == '__main__':
     unittest.main()

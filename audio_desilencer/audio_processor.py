@@ -33,13 +33,13 @@ class AudioProcessor:
         try:
             print("Processing audio...")
             non_silent_parts = self.split_audio_by_silence(min_silence_len, threshold)
-            audio_silent = AudioSegment.empty()
-            audio_non_silent = AudioSegment.empty()
+            silent_segments = []
+            non_silent_segments = []
             silent_parts_times = []
             non_silent_parts_times = []
 
             for i, (start_time, end_time) in enumerate(non_silent_parts):
-                audio_non_silent += self.audio[start_time:end_time]
+                non_silent_segments.append(self.audio[start_time:end_time])
                 non_silent_parts_times.append((start_time, end_time))
 
                 if i == 0:
@@ -48,8 +48,19 @@ class AudioProcessor:
                     silent_start_time = non_silent_parts[i - 1][1]
                 silent_end_time = start_time
 
-                audio_silent += self.audio[silent_start_time:silent_end_time]
+                silent_segments.append(self.audio[silent_start_time:silent_end_time])
                 silent_parts_times.append((silent_start_time, silent_end_time))
+
+            # Concatenate the audio segments efficiently by joining raw data
+            if silent_segments:
+                audio_silent = self.audio._spawn(b"".join(s.raw_data for s in silent_segments))
+            else:
+                audio_silent = AudioSegment.empty()
+
+            if non_silent_segments:
+                audio_non_silent = self.audio._spawn(b"".join(s.raw_data for s in non_silent_segments))
+            else:
+                audio_non_silent = AudioSegment.empty()
 
             # Create the output folder if it doesn't exist
             os.makedirs(output_folder, exist_ok=True)

@@ -26,6 +26,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+
       - name: Install package
         run: |
           python -m pip install --upgrade pip
@@ -69,5 +76,5 @@ jobs:
 
       - name: Verify installed API and CLI
         run: |
-          python -c "from audio_desilencer import AudioProcessor, ProcessingResult, complement_ranges; assert complement_ranges(10, [(2, 8)]) == [(0, 2), (8, 10)]"
+          python -c "from audio_desilencer import AudioProcessor, ProcessingResult, build_removal_ranges, complement_ranges; assert build_removal_ranges(1000, [(100, 900)], 200) == [(200, 800)]; assert complement_ranges(10, [(2, 8)]) == [(0, 2), (8, 10)]"
           audio-desilencer --help

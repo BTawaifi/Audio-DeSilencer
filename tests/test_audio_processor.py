@@ -74,6 +74,28 @@ class TestAudioProcessor(unittest.TestCase):
         mock_from_file.assert_called_once_with("dummy.m4a")
 
     @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
+    @patch('builtins.print')
+    def test_save_audio(self, mock_print, mock_from_file):
+        # Configure mock for init
+        mock_audio_segment = MagicMock()
+        mock_from_file.return_value = mock_audio_segment
+
+        processor = AudioProcessor("dummy.mp3")
+
+        # Create mock audio object
+        mock_audio = MagicMock()
+        output_path = "output.mp3"
+
+        # Call the method
+        processor.save_audio(mock_audio, output_path)
+
+        # Assert export was called correctly
+        mock_audio.export.assert_called_once_with(output_path, format="mp3")
+
+        # Assert print was called correctly
+        mock_print.assert_called_once_with(f"Saved audio to {output_path}")
+
+    @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
     def test_save_timeline_to_text(self, mock_from_file):
         # Configure mock for init
         mock_audio_segment = MagicMock()

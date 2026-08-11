@@ -1,8 +1,14 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
+import sys
+
+# Mock pydub and pydub.silence before importing AudioProcessor
+mock_pydub = MagicMock()
+mock_pydub_silence = MagicMock()
+sys.modules['pydub'] = mock_pydub
+sys.modules['pydub.silence'] = mock_pydub_silence
+
 from audio_desilencer.audio_processor import AudioProcessor
-# Import pydub.silence if you are directly patching detect_nonsilent from there
-# from pydub.silence import detect_nonsilent
 
 class TestAudioProcessor(unittest.TestCase):
 
@@ -49,12 +55,53 @@ class TestAudioProcessor(unittest.TestCase):
 
         # Assert that from_file was called correctly (without format)
         mock_from_file.assert_called_once_with("dummy.m4a")
-        # Check that 'format' was not in the kwargs or was None
-        # called_args, called_kwargs = mock_from_file.call_args
-        # self.assertNotIn('format', called_kwargs) # This is one way
-        # Or, more simply, if no other args are expected:
-        # self.assertEqual(called_args, ("dummy.m4a",))
-        # self.assertEqual(called_kwargs, {})
+
+    @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
+    def test_save_timeline_to_text(self, mock_from_file):
+        # Configure mock for init
+        mock_audio_segment = MagicMock()
+        mock_from_file.return_value = mock_audio_segment
+
+        processor = AudioProcessor("dummy.mp3")
+
+        timeline_data = [(0, 1000), (2000, 3000)]
+        output_path = "timeline.txt"
+
+        m = mock_open()
+        with patch('builtins.open', m):
+            processor.save_timeline_to_text(timeline_data, output_path)
+
+        m.assert_called_once_with(output_path, 'w')
+        handle = m()
+        handle.write.assert_any_call("[")
+        handle.write.assert_any_call("(0, 1000), ")
+        handle.write.assert_any_call("(2000, 3000), ")
+        handle.write.assert_any_call("]")
+
+    @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
+    def test_save_timeline_to_text_empty(self, mock_from_file):
+        # Configure mock for init
+        mock_audio_segment = MagicMock()
+        mock_from_file.return_value = mock_audio_segment
+
+        processor = AudioProcessor("dummy.mp3")
+
+        timeline_data = []
+        output_path = "empty_timeline.txt"
+
+        m = mock_open()
+        with patch('builtins.open', m):
+            processor.save_timeline_to_text(timeline_data, output_path)
+
+        m.assert_called_once_with(output_path, 'w')
+        handle = m()
+        handle.write.assert_any_call("[")
+        handle.write.assert_any_call("]")
+        # Ensure no tuples were written
+        for call in handle.write.call_args_list:
+            arg = call[0][0]
+            if arg not in ("[", "]"):
+                self.assertFalse(arg.startswith("("))
 
     @patch('audio_desilencer.audio_processor.AudioSegment.from_file')
     @patch('audio_desilencer.audio_processor.detect_nonsilent')
